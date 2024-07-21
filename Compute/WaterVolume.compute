@@ -1,0 +1,79 @@
+#pragma kernel RenderUnderwater
+
+Texture2D<float> _DepthTexture;
+Texture2D<float3> _CameraInput;
+RWTexture2D<float3> CameraTexture;
+
+Texture2D<float> _HeightMap;
+float4 _HeightMap_ST;
+float _Height;
+
+float _WaterLevel;
+
+float3 _Corner_UR;
+float3 _Corner_UL;
+float3 _Corner_DR;
+float3 _Corner_DL;
+
+float3 _CameraPosition_ws;
+
+float2 _ViewportResolution;
+
+float _NearClip;
+float _FarClip;
+
+SamplerState pointRepeatSampler;
+
+// Data Methods
+float3 PixelDirection(in float2 uv_ss)
+{
+    return lerp(lerp(_Corner_UL, _Corner_DR, uv_ss.x), lerp(_Corner_DL, _Corner_DR, uv_ss.x), uv_ss.y);
+}
+
+float Linear01Depth(float depth)
+{
+    float x, y, z, w;
+    x = (float)((_FarClip - _NearClip) / _NearClip);
+    y = 1.0f;
+    z = (float)(_FarClip - _NearClip) / (_NearClip * _FarClip);
+    w = (float)(1.0f / _FarClip);
+
+    return 1.0 / (x * depth + y);
+}
+
+float SceneDepth(in float2 uv_ss)
+{
+    return _DepthTexture.SampleLevel(pointRepeatSampler, uv_ss, 0);
+}
+
+// Over Pass
+half3 OverPass(half3 scene)
+{
+    return scene;
+}
+
+// Under Pass
+half3 UnderPass(half3 scene)
+{
+    return half3(0, 0, 0.5);
+}
+
+
+[numthreads(8,8,1)]
+void RenderUnderwater(uint3 id : SV_DispatchThreadID)
+{
+    float2 uv_ss = id.xy / _ViewportResolution;
+    float3 direction_ws = PixelDirection(uv_ss);
+    float depth = SceneDepth(uv_ss);
+    float depth_linear = Linear01Depth(depth);
+
+    float3 position_ws = direction_ws * depth_linear * _FarClip + _CameraPosition_ws;
+    float screenHeight_ws = _WaterLevel + _HeightMap.SampleLevel(pointRepeatSampler, position_ws.xz * _HeightMap_ST.xy + _HeightMap_ST.zw, 0) * _Height;
+
+    half3 sceneColor = _CameraInput[id.xy];
+
+    if(position_ws.y < screenHeight_ws)
+        CameraTexture[id.xy] = UnderPass(sceneColor);
+    else
+        CameraTexture[id.xy] = OverPass(sceneColor);
+}

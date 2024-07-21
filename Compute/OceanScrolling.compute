@@ -1,0 +1,29 @@
+#pragma kernel GenerateMaps
+
+Texture2D<half> Height_0;
+Texture2D<half> Height_1;
+Texture2D<half> Height_2;
+Texture2D<half> Height_3;
+
+SamplerState linearRepeatSampler;
+
+float4 _Tiling;
+float4 _Speed;
+float _TimeValue;
+float _Resolution;
+
+RWTexture2D<float> Height;
+
+[numthreads(16,16,1)]
+void GenerateMaps (uint3 id : SV_DispatchThreadID)
+{
+    float2 st = (float2(id.x, id.y) / _Resolution) * _Tiling.xy;
+    half h = Height_0.SampleLevel(linearRepeatSampler, st + _Speed.xy * _TimeValue, 0);
+    h += Height_1.SampleLevel(linearRepeatSampler, st - _Speed.xy * _TimeValue, 0);
+
+    st = (float2(id.x, id.y) / _Resolution) * _Tiling.zw;
+    h += Height_2.SampleLevel(linearRepeatSampler, st + _Speed.zw * _TimeValue, 0);
+    h += Height_3.SampleLevel(linearRepeatSampler, st - _Speed.zw * _TimeValue, 0);
+
+    Height[id.xy] = h * 0.25;
+}

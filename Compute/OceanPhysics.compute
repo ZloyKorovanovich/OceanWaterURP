@@ -1,0 +1,19 @@
+#pragma kernel CSMain
+
+RWStructuredBuffer<float3> Positions;
+Texture2D<half> _HeightMap;
+float4 _HeightMap_ST;
+
+float _Height;
+int _Resolution;
+
+SamplerState pointRepeatSampler;
+
+
+[numthreads(16,16,1)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+    int index = id.x + id.y * _Resolution;
+    float2 uv = Positions[index].xz * _HeightMap_ST.xy + _HeightMap_ST.zw;
+    Positions[index].y = _Height * _HeightMap.SampleLevel(pointRepeatSampler, uv, 0);
+}
